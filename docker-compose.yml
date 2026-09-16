@@ -55,8 +55,7 @@ services:
     profiles: ["lab1"]
     container_name: ti4601-crdb-1
     hostname: crdb-1
-    command: start --insecure --advertise-addr=crdb-1 --join=crdb-1,crdb-2,crdb-3 --locality=region=cr-sj,zone=a --cache=256MiB --max-sql-memory=256MiB
-    volumes:
+    command: start --insecure --advertise-addr=crdb-1 --join=crdb-1,crdb-2,crdb-3 --locality=region=tienda-a,zone=a --cache=256MiB --max-sql-memory=256MiB
       - crdb1:/cockroach/cockroach-data
     ports:
       - "127.0.0.1:26257:26257"
@@ -69,7 +68,7 @@ services:
     profiles: ["lab1"]
     container_name: ti4601-crdb-2
     hostname: crdb-2
-    command: start --insecure --advertise-addr=crdb-2 --join=crdb-1,crdb-2,crdb-3 --locality=region=cr-limon,zone=a --cache=256MiB --max-sql-memory=256MiB
+    command: start --insecure --advertise-addr=crdb-2 --join=crdb-1,crdb-2,crdb-3 --locality=region=tienda-b,zone=a --cache=256MiB --max-sql-memory=256MiB
     volumes:
       - crdb2:/cockroach/cockroach-data
     networks:
@@ -80,7 +79,7 @@ services:
     profiles: ["lab1"]
     container_name: ti4601-crdb-3
     hostname: crdb-3
-    command: start --insecure --advertise-addr=crdb-3 --join=crdb-1,crdb-2,crdb-3 --locality=region=us-east,zone=a --cache=256MiB --max-sql-memory=256MiB
+    command: start --insecure --advertise-addr=crdb-3 --join=crdb-1,crdb-2,crdb-3 --locality=region=cd-central,zone=a --cache=256MiB --max-sql-memory=256MiB
     volumes:
       - crdb3:/cockroach/cockroach-data
     networks:
