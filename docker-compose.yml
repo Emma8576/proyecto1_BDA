@@ -56,6 +56,7 @@ services:
     container_name: ti4601-crdb-1
     hostname: crdb-1
     command: start --insecure --advertise-addr=crdb-1 --join=crdb-1,crdb-2,crdb-3 --locality=region=tienda-a,zone=a --cache=256MiB --max-sql-memory=256MiB
+    volumes:
       - crdb1:/cockroach/cockroach-data
     ports:
       - "127.0.0.1:26257:26257"
