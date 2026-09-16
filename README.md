@@ -74,27 +74,32 @@ A continuación se presentan las salidas de los comandos de inspección ejecutad
  
 ### 4.1 Verificación de Regiones (`SHOW REGIONS;`)
  
-```sql
--- Salida de: SHOW REGIONS FROM DATABASE ti4601;
+Ejecutar en terminal:
+ 
+```bash
+docker exec -it ti4601-crdb-1 cockroach sql --insecure --database=ti4601 --execute="SHOW REGIONS FROM DATABASE ti4601;"
 ```
-
+ 
 ![Salida de SHOW REGIONS](images/show_regions.png)
  
 ### 4.2 Verificación de Localidades (`SHOW CREATE TABLE;`)
  
-```sql
--- Salida de: SHOW CREATE TABLE producto;
--- Salida de: SHOW CREATE TABLE stock;
+Ejecutar en terminal:
+ 
+```bash
+docker exec -it ti4601-crdb-1 cockroach sql --insecure --database=ti4601 --execute="SHOW CREATE TABLE producto; SHOW CREATE TABLE stock;"
 ```
-
+ 
 ![Salida de SHOW CREATE TABLE](images/show_create_table.png)
  
 ### 4.3 Distribución de Rangos y Sharding (`SHOW RANGES;`)
  
-```sql
--- Salida de: SHOW RANGES FROM TABLE stock WITH DETAILS;
+Ejecutar en terminal:
+ 
+```bash
+docker exec -it ti4601-crdb-1 cockroach sql --insecure --database=ti4601 --execute="SHOW RANGES FROM TABLE stock WITH DETAILS;"
 ```
-
+ 
 ![Salida de SHOW RANGES](images/show_ranges.png)
  
 ---
