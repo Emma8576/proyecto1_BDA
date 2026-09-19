@@ -99,7 +99,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=26257, help="Puerto SQL")
     parser.add_argument("--runs", type=int, default=50, help="Número de corridas (mínimo 30)")
     parser.add_argument("--warmup", type=int, default=5, help="Corridas de calentamiento descartadas")
-    parser.add_argument("--csv", default="mediciones_e3.csv", help="Ruta para guardar muestras crudas CSV")
+    parser.add_argument("--csv", default="evidence/mediciones_e3.csv", help="Ruta para guardar muestras crudas CSV")
     args = parser.parse_args()
     if args.runs < 30:
         parser.error("--runs debe ser >= 30 para el entregable")
