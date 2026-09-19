@@ -106,13 +106,33 @@ docker exec -it ti4601-crdb-1 cockroach sql --insecure --database=ti4601 --execu
  
 ## 5. Pruebas de Rendimiento y Tolerancia a Fallas (E3, E4, E5)
  
-*(Pendiente)*
+### 5.1 E3 — Mediciones de Latencia
  
-- **E3 — Mediciones de Latencia:** Ejecución de pruebas de lectura/escritura local y remota (p50 / p99).
-- **E4 — Chaos Testing (Falla de Nodo):** Simulación de pérdida de un nodo, comprobación de quórum Raft (2/3) y cálculo de RTO/RPO.
-- **E5 — Evaluación de Partición de Red:** Pruebas de aislamiento de red y consistencia.
+Se ejecutaron pruebas automatizadas de latencia para evaluar el comportamiento de operaciones de lectura y escritura (tanto locales como remotas) sobre el clúster multi-región. La evaluación contempló un tamaño de muestra de `n = 50` iteraciones por escenario.
+ 
+Ejecutar en terminal, desde el host, conectando al nodo gateway `crdb-1` (`tienda-a`):
+ 
+```cmd
+python proyecto1\measure_latency.py --gateway 127.0.0.1 --port 26257 --runs 50
+```
+ 
+![Salida de measure_latency.py](images/latency_table.png)
+ 
+**Resultados de Latencia Registrados (Gateway: `tienda-a`):**
+
+| Operación | Localidad | Región Objetivo | Muestras (n) | Latencia p50 (ms) | Latencia p99 (ms) | Observaciones |
+| :--- | :--- | :--- | :---: | :---: | :---: | :--- |
+| Lectura | Local | `tienda-a` | 50 | 3.740 | 63.184 | Atendida directamente por el leaseholder en el nodo local (`crdb-1`). |
+| Lectura | Remota | `tienda-b` | 50 | 5.679 | 6.850 | Consulta enrutada hacia el leaseholder ubicado en la región remota (`crdb-2`). |
+| Escritura | Local | `tienda-a` | 50 | 14.631 | 24.550 | Requiere la coordinación y quórum del protocolo Raft sobre la mayoría de los nodos (2/3). |
+| Escritura | Remota | `tienda-b` | 50 | 24.067 | 54.028 | Coordinación transaccional distribuida entre regiones con sobrecosto de enrutamiento. |
+
+> **Nota de Archivo de Evidencia:** Las muestras crudas de cada iteración fueron exportadas automáticamente y respaldadas en la ruta `evidence/mediciones_e3.csv`.
+ 
+- **E4 — Chaos Testing (Falla de Nodo):** Simulación de pérdida de un nodo, comprobación de quórum Raft (2/3) y cálculo de RTO/RPO. *(Pendiente)*
+- **E5 — Evaluación de Partición de Red:** Pruebas de aislamiento de red y consistencia. *(Pendiente)*
 ---
- 
+
 ## 6. Mantenimiento y Comandos Útiles
  
 Ver estado de los nodos del clúster:
