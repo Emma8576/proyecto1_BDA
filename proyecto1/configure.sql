@@ -1,6 +1,4 @@
-
 -- Configuracion de regiones de la base de datos
-
 -- Region principal del sistema.
 ALTER DATABASE ti4601
 SET PRIMARY REGION "tienda-a";

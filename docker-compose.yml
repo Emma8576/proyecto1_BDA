@@ -90,6 +90,8 @@ services:
     image: cockroachdb/cockroach:v24.3.0
     profiles: ["lab1"]
     container_name: ti4601-crdb-init
+    environment:
+      COCKROACH_LICENSE: ${COCKROACH_LICENSE:-}
     depends_on:
       - crdb-1
       - crdb-2

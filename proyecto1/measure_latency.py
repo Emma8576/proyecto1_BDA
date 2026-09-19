@@ -13,10 +13,11 @@ from dataclasses import dataclass
 
 import psycopg
 
-
+# Registro de UUIDs
 ROWS = {
-    "cr-sj": "10000000-0000-0000-0000-000000000001",
-    "cr-limon": "10000000-0000-0000-0000-000000000002",
+    "tienda-a": "10000000-0000-0000-0000-000000000001",
+    "tienda-b": "10000000-0000-0000-0000-000000000002",
+    "cd-central": "10000000-0000-0000-0000-000000000003",
 }
 
 
@@ -28,17 +29,17 @@ class Case:
 
 
 CASES = (
-    Case("read", "local", "cr-sj"),
-    Case("read", "remote", "cr-limon"),
-    Case("write", "local", "cr-sj"),
-    Case("write", "remote", "cr-limon"),
+    Case("read", "local", "tienda-a"),
+    Case("read", "remote", "tienda-b"),
+    Case("write", "local", "tienda-a"),
+    Case("write", "remote", "tienda-b"),
 )
 
 
-def connect(host: str) -> psycopg.Connection:
+def connect(host: str, port: int) -> psycopg.Connection:
     return psycopg.connect(
         host=host,
-        port=26257,
+        port=port,
         user="root",
         dbname="ti4601",
         sslmode="disable",
@@ -58,7 +59,7 @@ def execute_case(conn: psycopg.Connection, case: Case) -> None:
     if case.operation == "read":
         row = conn.execute(
             """
-            SELECT monto, estado
+            SELECT total, estado
             FROM pedido
             WHERE region = %s AND pedido_id = %s
             """,
@@ -70,7 +71,7 @@ def execute_case(conn: psycopg.Connection, case: Case) -> None:
         conn.execute(
             """
             UPDATE pedido
-            SET version = version + 1
+            SET total = total + 0.01
             WHERE region = %s AND pedido_id = %s
             """,
             (case.region, pedido_id),
@@ -94,10 +95,11 @@ def measure(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--gateway", default="crdb-1")
-    parser.add_argument("--runs", type=int, default=50)
-    parser.add_argument("--warmup", type=int, default=5)
-    parser.add_argument("--csv", default="")
+    parser.add_argument("--gateway", default="localhost", help="Host del gateway (ej. localhost o ti4601-crdb-1)")
+    parser.add_argument("--port", type=int, default=26257, help="Puerto SQL")
+    parser.add_argument("--runs", type=int, default=50, help="Número de corridas (mínimo 30)")
+    parser.add_argument("--warmup", type=int, default=5, help="Corridas de calentamiento descartadas")
+    parser.add_argument("--csv", default="mediciones_e3.csv", help="Ruta para guardar muestras crudas CSV")
     args = parser.parse_args()
     if args.runs < 30:
         parser.error("--runs debe ser >= 30 para el entregable")
@@ -105,13 +107,13 @@ def main() -> int:
         parser.error("--warmup debe ser >= 1")
 
     print(
-        f"=== Lab 1 · gateway={args.gateway} · "
+        f"=== Proyecto 1 · gateway={args.gateway} · "
         f"warmup={args.warmup} · n={args.runs} ==="
     )
     summaries: list[dict[str, str | int | float]] = []
     raw: list[dict[str, str | int | float]] = []
 
-    with connect(args.gateway) as conn:
+    with connect(args.gateway, args.port) as conn:
         gateway_region = conn.execute(
             "SELECT gateway_region()"
         ).fetchone()[0]
@@ -140,11 +142,12 @@ def main() -> int:
             )
 
     print("\noperation locality home_region n p50_ms p99_ms")
+    print("-" * 58)
     for row in summaries:
         print(
-            f"{row['operation']:9} {row['locality']:8} "
-            f"{row['home_region']:11} {row['n']:>2} "
-            f"{row['p50_ms']:>7.3f} {row['p99_ms']:>7.3f}"
+            f"{row['operation']:10} {row['locality']:10} "
+            f"{row['home_region']:12} {row['n']:>2} "
+            f"{row['p50_ms']:>8.3f} {row['p99_ms']:>8.3f}"
         )
 
     if args.csv:
@@ -156,9 +159,10 @@ def main() -> int:
         print(f"\nMuestras crudas: {args.csv}")
 
     print(
-        "\nNota: Docker corre las tres regiones en una sola máquina. "
-        "Un ratio local/remoto cercano a 1 no invalida el experimento."
+        "\nNota: Al correr las 3 regiones en una sola máquina, los tiempos locales/remotos "
+        "serán muy similares a menos que se aplique simulación de latencia de red."
     )
+    
     return 0
 
 
