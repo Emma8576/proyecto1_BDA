@@ -1,15 +1,15 @@
--- Tabla de control para observar mayoría Raft 2/3.
--- No usa REGIONAL BY ROW: el clúster docente tiene un solo nodo por región.
+-- E4 — Tabla de control para observar mayoría Raft (RF=3).
+-- Usa la BD ti4601 (ya configurada con 3 regiones).
+-- No usa REGIONAL BY ROW para que los rangos sean globales
+-- y la prueba no dependa de la región hogar de la fila.
 
-CREATE DATABASE IF NOT EXISTS ti4601_raft;
-
-CREATE TABLE IF NOT EXISTS ti4601_raft.public.raft_probe (
-    id INT8 PRIMARY KEY,
-    version INT8 NOT NULL DEFAULT 0,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE IF NOT EXISTS ti4601.public.stock_probe (
+    id          INT8        PRIMARY KEY,
+    region_src  STRING      NOT NULL,   -- región del nodo que hizo la escritura
+    version     INT8        NOT NULL DEFAULT 0,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO ti4601_raft.public.raft_probe (id, version)
-VALUES (1, 0)
+INSERT INTO ti4601.public.stock_probe (id, region_src, version)
+VALUES (1, 'tienda-a', 0)
 ON CONFLICT (id) DO NOTHING;
-
