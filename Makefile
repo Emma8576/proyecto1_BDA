@@ -2,7 +2,8 @@
 # Interfaz operativa genérica (Compose). Smoke tests = documentados en README, no targets.
 
 .PHONY: help up down down-v build shell test-tx lab-concurrency \
-	lab1-up lab1-down lab1-down-v lab1-shell lab1-status lab1-check reset-pg
+	lab1-up lab1-down lab1-down-v lab1-shell lab1-status lab1-check reset-pg \
+	p1-chaos-setup p1-chaos-probe p1-chaos-rpo p1-chaos-reset
 
 COMPOSE := docker compose
 ISOLATION ?= READ_COMMITTED
@@ -70,3 +71,33 @@ lab1-status:
 lab1-check:
 	$(COMPOSE) --profile lab1 run --rm --no-deps app-crdb \
 		python3 labs/lab1-cluster/verify_cluster.py
+
+p1-chaos-setup:
+	docker exec -i ti4601-crdb-1 cockroach sql --insecure --database=ti4601 \
+		< proyecto1/chaos_probe_setup.sql
+
+p1-chaos-probe:
+	$(COMPOSE) --profile lab1 run --rm --no-deps app-crdb \
+		python3 -u proyecto1/chaos_probe.py \
+			--duration 30 \
+			--signal-file evidence/chaos-e4-stop.epoch \
+			--csv evidence/chaos-e4.csv \
+		| tee evidence/chaos-e4.txt
+
+p1-chaos-rpo:
+	$(COMPOSE) --profile lab1 run --rm --no-deps app-crdb \
+		psql -X -v ON_ERROR_STOP=1 -c \
+		"SELECT id, version, updated_at FROM ti4601.public.stock_probe WHERE id=1;" \
+		| tee evidence/chaos-e4-rpo.txt
+
+p1-chaos-reset:
+	docker start ti4601-crdb-2 ti4601-crdb-3
+	docker exec -it ti4601-crdb-1 cockroach sql --insecure --database=ti4601 \
+		--execute="UPDATE ti4601.public.stock_probe SET version = 0, updated_at = now() WHERE id = 1;"
+	rm -f evidence/chaos-e4-stop.epoch \
+		evidence/chaos-e4-stop.txt \
+		evidence/chaos-e4.txt \
+		evidence/chaos-e4.csv \
+		evidence/chaos-e4-before.txt \
+		evidence/chaos-e4-node-status.txt \
+		evidence/chaos-e4-rpo.txt
