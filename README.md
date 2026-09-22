@@ -129,7 +129,181 @@ python proyecto1\measure_latency.py --gateway 127.0.0.1 --port 26257 --runs 50
 
 > **Nota de Archivo de Evidencia:** Las muestras crudas de cada iteración fueron exportadas automáticamente y respaldadas en la ruta `evidence/mediciones_e3.csv`.
  
-- **E4 — Chaos Testing (Falla de Nodo):** Simulación de pérdida de un nodo, comprobación de quórum Raft (2/3) y cálculo de RTO/RPO. *(Pendiente)*
+### 5.2 E4 — Chaos Testing (Falla de Nodo)
+ 
+Simulación de pérdida de un nodo, comprobación de quórum Raft (2/3) y cálculo de RTO/RPO.
+
+#### 5.2.1 Protocolo de Falla — Tabla de Control (RF = 3)
+ 
+La prueba opera sobre una tabla auxiliar `ti4601.public.stock_probe` que no usa
+`REGIONAL BY ROW`, de forma que sus rangos se replican en los tres nodos sin depender
+de la región hogar, garantizando RF = 3 y observabilidad directa del quórum Raft.
+
+Crear la tabla de control:
+ 
+```bash
+make p1-chaos-setup
+```
+ 
+Verificar que la fila existe:
+ 
+```bash
+docker exec -it ti4601-crdb-1 cockroach sql --insecure --database=ti4601 \
+  --execute="SELECT id, version, updated_at FROM stock_probe WHERE id = 1;"
+```
+**Resultado esperado:** una fila con `version = 0`.
+
+#### 5.2.2 Inyección de Falla — Dos Terminales HOST
+
+Se necesitan **dos terminales HOST** corriendo en paralelo.
+ 
+**Paso 1 — Registrar precondición y mover el lease**
+ 
+Desde **HOST**, abrir el shell del contenedor:
+ 
+```bash
+make lab1-shell
+```
+ 
+Dentro del contenedor, abrir `psql`:
+ 
+```bash
+psql -X -v ON_ERROR_STOP=1
+```
+ 
+En **PSQL**, activar la captura y ejecutar las consultas de precondición:
+ 
+```sql
+\o evidence/chaos-e4-before.txt
+ 
+SELECT node_id, locality
+FROM crdb_internal.gossip_nodes
+ORDER BY node_id;
+ 
+SELECT node_id, store_id
+FROM crdb_internal.kv_store_status
+ORDER BY node_id;
+ 
+SELECT id, version, updated_at
+FROM ti4601.public.stock_probe
+WHERE id = 1;
+ 
+SELECT range_id, lease_holder, voting_replicas
+FROM [SHOW RANGES FROM TABLE
+      ti4601.public.stock_probe WITH DETAILS];
+```
+ 
+Identifique el `node_id` cuya localidad es `region=tienda-b`; ese es el proceso
+`crdb-2` que se detendrá. Busque su `store_id` en la segunda consulta. Sustituya
+`<STORE_TIENDA_B>` por ese número. **No escriba literalmente los signos `< >`.**
+ 
+```sql
+ALTER RANGE RELOCATE LEASE TO <STORE_TIENDA_B>
+FOR SELECT range_id
+FROM [SHOW RANGES FROM TABLE
+      ti4601.public.stock_probe WITH DETAILS];
+ 
+SELECT range_id, lease_holder, voting_replicas
+FROM [SHOW RANGES FROM TABLE
+      ti4601.public.stock_probe WITH DETAILS];
+\o
+\q
+```
+ 
+Salir del contenedor:
+ 
+```bash
+exit
+```
+ 
+**Resultado esperado:** `lease_holder` coincide con el `node_id` de `tienda-b` y
+`voting_replicas` conserva tres IDs.
+
+**Paso 2 — Terminal A: iniciar la sonda de escrituras continuas**
+ 
+```bash
+make p1-chaos-probe
+```
+ 
+**Resultado esperado durante el baseline:** varias líneas `before-stop ok` con
+latencia ~5–9 ms. Espere cinco segundos y no cierre esta terminal.
+ 
+**Paso 3 — Terminal B: provocar y registrar la falla**
+ 
+Antes de detener nada, conserve este comando de rescate:
+ 
+```bash
+docker start ti4601-crdb-2 ti4601-crdb-3
+```
+ 
+Ejecute cada comando por separado y observe Terminal A:
+ 
+```bash
+docker stop --timeout 0 ti4601-crdb-2
+date +%s.%N > evidence/chaos-e4-stop.epoch
+date --iso-8601=ns | tee evidence/chaos-e4-stop.txt
+sleep 10
+docker start ti4601-crdb-2
+```
+ 
+**Resultado esperado:** después de crear el archivo de señal, Terminal A puede mostrar
+un `after-stop error` o un `after-stop ok` con latencia alta mientras ocurre el
+failover. Antes de finalizar debe volver a mostrar writes OK con latencia normal.
+ 
+Espere a que Terminal A termine. Restaure siempre el nodo aunque interrumpa la prueba.
+
+#### 4.3 Análisis RTO / RPO
+ 
+Verificar estado del clúster y RPO:
+ 
+```bash
+make lab1-status | tee evidence/chaos-e4-node-status.txt
+make p1-chaos-rpo
+```
+ 
+Si el nodo todavía aparece con `is_live = false`, espere 10 segundos y repita
+`make lab1-status`.
+ 
+**Cómo calcular el RTO desde el CSV**
+ 
+1. Tome el número de `evidence/chaos-e4-stop.epoch`.
+2. Busque la primera fila con `phase=after-stop` y `status=ok` en `evidence/chaos-e4.csv`.
+3. Reste el instante de falla de su columna `completed_epoch`.
+4. Multiplique por 1000 para expresar milisegundos.
+5. Compare con el RTO impreso por la sonda al finalizar.
+
+
+**Resultados Registrados:**
+ 
+| Métrica | Valor observado | Descripción |
+| :--- | :--- | :--- |
+| RTO | 3702.4 ms | Tiempo hasta la primera escritura confirmada post-falla |
+| RPO | 0 ms | Ninguna escritura confirmada se perdió (`version` no retrocedió) |
+| Errores transitorios | 0 | Los writes en vuelo quedaron bloqueados ~3700–3800 ms y confirmaron con quórum 2/3 |
+ 
+> **Nota:** Durante el failover, las dos escrituras en vuelo al momento del `docker stop`
+> quedaron bloqueadas ~3700–3800 ms mientras los nodos `crdb-1` (tienda-a) y `crdb-3`
+> (cd-central) re-elegían leaseholder con quórum 2/3. Una vez electo, los writes
+> confirmaron sin pérdida de datos. El cálculo manual del RTO desde el CSV coincide
+> exactamente con el valor reportado por la sonda:
+>
+> ```
+> stop_epoch      = 1790036796.764465   (evidence/chaos-e4-stop.epoch)
+> completed_epoch = 1790036800.466885   (primera fila after-stop/ok en chaos-e4.csv)
+> RTO = (1790036800.466885 - 1790036796.764465) × 1000 = 3702.4 ms
+> ```
+ 
+> **Nota de Archivo de Evidencia:** Los archivos generados por la prueba se encuentran
+> en la ruta `evidence/chaos-e4*`.
+
+**Reinicio — Volver a ejecutar la prueba desde cero**
+ 
+```bash
+make p1-chaos-reset
+```
+
+Vuelva al Paso 1 de la sección 5.2.
+
 - **E5 — Evaluación de Partición de Red:** Pruebas de aislamiento de red y consistencia. *(Pendiente)*
 ---
 
