@@ -271,31 +271,30 @@ Si el nodo todavía aparece con `is_live = false`, espere 10 segundos y repita
 3. Reste el instante de falla de su columna `completed_epoch`.
 4. Multiplique por 1000 para expresar milisegundos.
 5. Compare con el RTO impreso por la sonda al finalizar.
-
-
 **Resultados Registrados:**
  
 | Métrica | Valor observado | Descripción |
 | :--- | :--- | :--- |
-| RTO | 3702.4 ms | Tiempo hasta la primera escritura confirmada post-falla |
+| RTO | 3897.2 ms | Tiempo hasta la primera escritura confirmada post-falla |
 | RPO | 0 ms | Ninguna escritura confirmada se perdió (`version` no retrocedió) |
-| Errores transitorios | 0 | Los writes en vuelo quedaron bloqueados ~3700–3800 ms y confirmaron con quórum 2/3 |
+| Errores transitorios | 0 | Los writes en vuelo quedaron bloqueados ~3700–3810 ms y confirmaron con quórum 2/3 |
  
-> **Nota:** Durante el failover, las dos escrituras en vuelo al momento del `docker stop`
-> quedaron bloqueadas ~3700–3800 ms mientras los nodos `crdb-1` (tienda-a) y `crdb-3`
-> (cd-central) re-elegían leaseholder con quórum 2/3. Una vez electo, los writes
-> confirmaron sin pérdida de datos. El cálculo manual del RTO desde el CSV coincide
+> **Nota:** Durante el failover, el lease fue movido exitosamente a `crdb-2` (`tienda-b`,
+> `store_id=3`) antes de la prueba. Al detener ese nodo, los writes en vuelo quedaron
+> bloqueados ~3700–3810 ms mientras los nodos `crdb-1` (tienda-a) y `crdb-3` (cd-central)
+> re-elegían leaseholder con quórum 2/3. Una vez electo, los writes confirmaron sin pérdida
+> de datos y la latencia volvió a ~5–8 ms. El cálculo manual del RTO desde el CSV coincide
 > exactamente con el valor reportado por la sonda:
 >
 > ```
-> stop_epoch      = 1790036796.764465   (evidence/chaos-e4-stop.epoch)
-> completed_epoch = 1790036800.466885   (primera fila after-stop/ok en chaos-e4.csv)
-> RTO = (1790036800.466885 - 1790036796.764465) × 1000 = 3702.4 ms
+> stop_epoch      = 1790037494.109024   (evidence/chaos-e4-stop.epoch)
+> completed_epoch = 1790037498.006245   (primera fila after-stop/ok en chaos-e4.csv)
+> RTO = (1790037498.006245 - 1790037494.109024) × 1000 = 3897.2 ms
 > ```
  
 > **Nota de Archivo de Evidencia:** Los archivos generados por la prueba se encuentran
 > en la ruta `evidence/chaos-e4*`.
-
+ 
 **Reinicio — Volver a ejecutar la prueba desde cero**
  
 ```bash
@@ -305,7 +304,6 @@ make p1-chaos-reset
 Vuelva al Paso 1 de la sección 5.2.
 
 - **E5 — Evaluación de Partición de Red:** Pruebas de aislamiento de red y consistencia. *(Pendiente)*
----
 
 ## 6. Mantenimiento y Comandos Útiles
  

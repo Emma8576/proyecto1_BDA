@@ -3,7 +3,8 @@
 
 .PHONY: help up down down-v build shell test-tx lab-concurrency \
 	lab1-up lab1-down lab1-down-v lab1-shell lab1-status lab1-check reset-pg \
-	p1-chaos-setup p1-chaos-probe p1-chaos-rpo p1-chaos-reset
+	p1-chaos-setup p1-chaos-probe p1-chaos-rpo p1-chaos-reset \
+	p1-pg-setup p1-pg-latency
 
 COMPOSE := docker compose
 ISOLATION ?= READ_COMMITTED
@@ -17,6 +18,7 @@ help:
 	@echo "  make lab-concurrency ISOLATION=READ_COMMITTED|SERIALIZABLE"
 	@echo "  Lab 1: make lab1-up | lab1-status | lab1-shell | lab1-check"
 	@echo "         make lab1-down | lab1-down-v"
+	@echo "  E5 PostgreSQL: make p1-pg-setup && make p1-pg-latency"
 	@echo "  Configuración, medición y chaos: seguir labs/lab1-cluster/README.md"
 	@echo ""
 	@echo "Smoke test (manual): ver README.md § Verificar el entorno"
@@ -100,3 +102,12 @@ p1-chaos-reset:
 		evidence/chaos-e4-before.txt \
 		evidence/chaos-e4-node-status.txt \
 		evidence/chaos-e4-rpo.txt
+
+p1-pg-setup: up
+	docker exec -i ti4601-postgres psql -U ti4601 -d ti4601 < proyecto1/e5/schema_pg.sql
+	docker exec -i ti4601-postgres psql -U ti4601 -d ti4601 < proyecto1/e5/seed_pg.sql
+
+p1-pg-latency: up
+	$(COMPOSE) run --rm app \
+		python3 -u proyecto1/e5/measure_latency_pg.py --runs 50 \
+		| tee evidence/mediciones_e5_pg.txt
