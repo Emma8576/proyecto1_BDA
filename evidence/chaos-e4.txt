@@ -1,0 +1,68 @@
+=== Proyecto 1 · sonda Chaos E4 ===
+PGHOST=crdb-1,crdb-2,crdb-3
+Fila objetivo: ti4601.public.stock_probe(id=1), RF=3
+Señal de falla: evidence/chaos-e4-stop.epoch
+2026-09-22T00:37:58.032+00:00 before-stop ok      10.920 ms 
+2026-09-22T00:37:58.526+00:00 before-stop ok       5.364 ms 
+2026-09-22T00:37:59.027+00:00 before-stop ok       5.970 ms 
+2026-09-22T00:37:59.527+00:00 before-stop ok       6.392 ms 
+2026-09-22T00:38:00.029+00:00 before-stop ok       7.710 ms 
+2026-09-22T00:38:00.530+00:00 before-stop ok       5.775 ms 
+2026-09-22T00:38:01.027+00:00 before-stop ok       5.468 ms 
+2026-09-22T00:38:01.529+00:00 before-stop ok       7.760 ms 
+2026-09-22T00:38:02.028+00:00 before-stop ok       6.341 ms 
+2026-09-22T00:38:02.527+00:00 before-stop ok       5.649 ms 
+2026-09-22T00:38:03.028+00:00 before-stop ok       6.068 ms 
+2026-09-22T00:38:03.528+00:00 before-stop ok       5.933 ms 
+2026-09-22T00:38:04.029+00:00 before-stop ok       7.013 ms 
+2026-09-22T00:38:04.528+00:00 before-stop ok       6.024 ms 
+2026-09-22T00:38:05.028+00:00 before-stop ok       6.012 ms 
+2026-09-22T00:38:05.527+00:00 before-stop ok       5.233 ms 
+2026-09-22T00:38:06.033+00:00 before-stop ok       5.829 ms 
+2026-09-22T00:38:06.528+00:00 before-stop ok       5.801 ms 
+2026-09-22T00:38:07.030+00:00 before-stop ok       6.521 ms 
+2026-09-22T00:38:07.528+00:00 before-stop ok       5.139 ms 
+2026-09-22T00:38:08.030+00:00 before-stop ok       6.576 ms 
+2026-09-22T00:38:08.529+00:00 before-stop ok       6.076 ms 
+2026-09-22T00:38:09.029+00:00 before-stop ok       5.930 ms 
+2026-09-22T00:38:09.529+00:00 before-stop ok       6.117 ms 
+2026-09-22T00:38:10.029+00:00 before-stop ok       6.339 ms 
+2026-09-22T00:38:10.529+00:00 before-stop ok       5.967 ms 
+2026-09-22T00:38:11.029+00:00 before-stop ok       5.568 ms 
+2026-09-22T00:38:11.529+00:00 before-stop ok       5.896 ms 
+2026-09-22T00:38:12.029+00:00 before-stop ok       5.691 ms 
+2026-09-22T00:38:12.529+00:00 before-stop ok       5.540 ms 
+2026-09-22T00:38:18.007+00:00 after-stop  ok    3810.825 ms 
+2026-09-22T00:38:21.709+00:00 after-stop  ok    3699.571 ms 
+2026-09-22T00:38:25.396+00:00 after-stop  ok    3685.108 ms 
+2026-09-22T00:38:25.404+00:00 after-stop  ok       5.474 ms 
+2026-09-22T00:38:25.904+00:00 after-stop  ok       5.446 ms 
+2026-09-22T00:38:26.403+00:00 after-stop  ok       4.976 ms 
+2026-09-22T00:38:26.914+00:00 after-stop  ok       5.814 ms 
+2026-09-22T00:38:27.405+00:00 after-stop  ok       6.160 ms 
+2026-09-22T00:38:27.904+00:00 after-stop  ok       5.028 ms 
+2026-09-22T00:38:28.405+00:00 after-stop  ok       6.390 ms 
+2026-09-22T00:38:28.905+00:00 after-stop  ok       5.580 ms 
+2026-09-22T00:38:29.405+00:00 after-stop  ok       5.875 ms 
+2026-09-22T00:38:29.905+00:00 after-stop  ok       5.619 ms 
+2026-09-22T00:38:30.406+00:00 after-stop  ok       6.020 ms 
+2026-09-22T00:38:30.906+00:00 after-stop  ok       6.247 ms 
+2026-09-22T00:38:31.407+00:00 after-stop  ok       6.373 ms 
+2026-09-22T00:38:31.909+00:00 after-stop  ok       5.838 ms 
+2026-09-22T00:38:32.406+00:00 after-stop  ok       5.510 ms 
+2026-09-22T00:38:32.907+00:00 after-stop  ok       6.587 ms 
+2026-09-22T00:38:33.405+00:00 after-stop  ok       5.030 ms 
+2026-09-22T00:38:33.911+00:00 after-stop  ok       8.093 ms 
+2026-09-22T00:38:34.405+00:00 after-stop  ok       5.504 ms 
+2026-09-22T00:38:34.906+00:00 after-stop  ok       5.678 ms 
+2026-09-22T00:38:35.407+00:00 after-stop  ok       5.650 ms 
+2026-09-22T00:38:35.907+00:00 after-stop  ok       5.799 ms 
+2026-09-22T00:38:36.409+00:00 after-stop  ok       6.339 ms 
+2026-09-22T00:38:36.906+00:00 after-stop  ok       5.513 ms 
+2026-09-22T00:38:37.406+00:00 after-stop  ok       5.812 ms 
+2026-09-22T00:38:37.910+00:00 after-stop  ok       8.459 ms 
+
+Muestras: evidence/chaos-e4.csv
+Errores después de la señal: 0
+RTO observado hasta primer write OK: 3897.2 ms
+RPO se verifica después: la fila committed anterior debe seguir presente y su version no debe retroceder.

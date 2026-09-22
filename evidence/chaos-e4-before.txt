@@ -1,0 +1,34 @@
+ node_id |         locality         
+---------+--------------------------
+       1 | region=tienda-a,zone=a
+       2 | region=cd-central,zone=a
+       3 | region=tienda-b,zone=a
+(3 rows)
+
+ node_id | store_id 
+---------+----------
+       1 |        1
+       2 |        2
+       3 |        3
+(3 rows)
+
+ id | version |          updated_at           
+----+---------+-------------------------------
+  1 |       0 | 2026-09-22 00:37:01.572974+00
+(1 row)
+
+ range_id | lease_holder | voting_replicas 
+----------+--------------+-----------------
+      120 |            1 | {1,3,2}
+(1 row)
+
+ range_id |   pretty   | result 
+----------+------------+--------
+      120 | /Table/116 | ok
+(1 row)
+
+ range_id | lease_holder | voting_replicas 
+----------+--------------+-----------------
+      120 |            3 | {1,3,2}
+(1 row)
+

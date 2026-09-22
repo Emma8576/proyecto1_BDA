@@ -79,7 +79,7 @@ p1-chaos-setup:
 p1-chaos-probe:
 	$(COMPOSE) --profile lab1 run --rm --no-deps app-crdb \
 		python3 -u proyecto1/chaos_probe.py \
-			--duration 30 \
+			--duration 40 \
 			--signal-file evidence/chaos-e4-stop.epoch \
 			--csv evidence/chaos-e4.csv \
 		| tee evidence/chaos-e4.txt
@@ -92,8 +92,7 @@ p1-chaos-rpo:
 
 p1-chaos-reset:
 	docker start ti4601-crdb-2 ti4601-crdb-3
-	docker exec -it ti4601-crdb-1 cockroach sql --insecure --database=ti4601 \
-		--execute="UPDATE ti4601.public.stock_probe SET version = 0, updated_at = now() WHERE id = 1;"
+	docker exec -it ti4601-crdb-1 cockroach sql --insecure --database=ti4601 --execute="DROP TABLE IF EXISTS stock_probe;"
 	rm -f evidence/chaos-e4-stop.epoch \
 		evidence/chaos-e4-stop.txt \
 		evidence/chaos-e4.txt \
