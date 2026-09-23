@@ -252,7 +252,7 @@ failover. Antes de finalizar debe volver a mostrar writes OK con latencia normal
  
 Espere a que Terminal A termine. Restaure siempre el nodo aunque interrumpa la prueba.
 
-#### 4.3 Análisis RTO / RPO
+#### 5.2.3 Análisis RTO / RPO
  
 Verificar estado del clúster y RPO:
  
@@ -303,7 +303,91 @@ make p1-chaos-reset
 
 Vuelva al Paso 1 de la sección 5.2.
 
-- **E5 — Evaluación de Partición de Red:** Pruebas de aislamiento de red y consistencia. *(Pendiente)*
+---
+
+### 5.3 E5 — Crítica: ¿Hacía falta distribuir?
+
+#### 5.3.1 Alternativa: 1 nodo primario + réplica de lectura
+
+La alternativa directa para este dominio es un servidor PostgreSQL con replicación
+streaming: el nodo primario acepta todas las escrituras y la réplica sirve lecturas
+en modo asíncrono. No requiere configuración de regiones, cláusulas de localidad ni
+conocimiento de consenso distribuido. Es el punto de partida estándar para sistemas
+de comercio de tamaño pequeño a mediano.
+
+#### 5.3.2 Comparación
+
+##### 5.3.2.1 Latencia (números reales, misma red Docker, n = 50)
+
+Las mediciones de CockroachDB se re-ejecutaron desde dentro de un contenedor
+(`--gateway crdb-1`) en las mismas condiciones que las de PostgreSQL (`PGHOST=postgres`),
+eliminando la variable de NAT y red. Los números de E3 del README se conservan como
+evidencia histórica de esa ejecución en otra máquina.
+ 
+> **Nota metodológica:** las mediciones de E3 del README fueron realizadas en una
+> máquina distinta, por lo que no son comparables directamente con los números de
+> PostgreSQL. Para esta comparación se re-ejecutó `measure_latency.py` desde dentro
+> de un contenedor en la misma red Docker (`--gateway crdb-1`), en las mismas
+> condiciones que la medición de PostgreSQL.
+ 
+| Operación | Localidad | CockroachDB p50 | CockroachDB p99 | PostgreSQL p50 | PostgreSQL p99 | Factor (p50) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| Lectura | Local | 0.425 ms | 0.778 ms | 0.078 ms | 0.276 ms | **5×** |
+| Lectura | Remota | 0.761 ms | 0.941 ms | 0.075 ms | 0.168 ms | **10×** |
+| Escritura | Local | 3.453 ms | 4.441 ms | 1.238 ms | 3.389 ms | **3×** |
+| Escritura | Remota | 3.781 ms | 7.634 ms | 1.366 ms | 3.842 ms | **3×** |
+ 
+El protocolo Raft exige confirmación de 2/3 nodos antes de retornar al cliente,
+lo que impone un sobrecosto de **3× a 10×** en latencia respecto a PostgreSQL bajo
+condiciones simétricas. Las lecturas muestran el mayor contraste relativo: 0.425 ms
+en CockroachDB frente a 0.078 ms en PostgreSQL (~5×), atribuible al overhead del
+runtime distribuido y la resolución de leases. Las escrituras son ~3× más lentas
+por el quórum Raft: 3.5 ms frente a 1.2 ms en PostgreSQL.
+
+##### 5.3.2.2 Complejidad operativa
+
+| Dimensión | CockroachDB ×3 | PostgreSQL primario + réplica |
+| :--- | :--- | :--- |
+| Despliegue | `docker compose --profile lab1 up` + `crdb-init` | `docker compose up` |
+| Configuración de regiones | `ALTER DATABASE … ADD REGION` + DDL de localidad | No aplica |
+| Esquema | `LOCALITY GLOBAL` / `REGIONAL BY ROW` obligatorio | SQL estándar |
+| Failover | Automático (quórum Raft 2/3, ~3.9 s) | Manual o con Patroni (~30–60 s) |
+| Conocimiento requerido | Raft, leases, rangos, replicación multi-región | Replicación streaming básica |
+
+##### 5.3.2.3 Costo en la misma máquina
+
+Medición real con `docker stats` con ambos motores en estado idle (sin carga activa):
+ 
+```bash
+docker stats --no-stream --format "Name,MemUsage\n{{.Name}},{{.MemUsage}}" \
+  ti4601-crdb-1 ti4601-crdb-2 ti4601-crdb-3 ti4601-postgres \
+  > evidence/consumo_mem.txt
+```
+ 
+| Contenedor | Memoria usada |
+| :--- | :---: |
+| `ti4601-crdb-1` | 998.8 MiB |
+| `ti4601-crdb-2` | 895.1 MiB |
+| `ti4601-crdb-3` | 935.9 MiB |
+| **CockroachDB total** | **2 829.8 MiB** |
+| `ti4601-postgres` | 30.45 MiB |
+ 
+El clúster CockroachDB consume ~2.8 GiB de RAM frente a 30 MiB de PostgreSQL,
+una diferencia de **93×**. En una máquina de recursos limitados este overhead es
+determinante; en un servidor de producción dedicado es menos relevante pero sigue
+siendo un costo operativo real.
+
+#### 5.3.3 Conclusión
+
+La distribución **no está justificada** en el escenario implementado (tres nodos en
+una sola máquina) porque el sobrecosto de latencia (3×–10× medido), complejidad
+operativa y consumo de recursos (~93× más RAM) se paga sin obtener separación
+geográfica real.
+ 
+Está **justificada solo por residencia** si los nodos se despliegan en sitios
+físicamente separados: en ese caso `REGIONAL BY ROW` garantiza que el inventario y
+los pedidos de cada tienda residan y se sirvan localmente, y el failover automático
+(~3.9 s observado en E4) elimina la dependencia de un operador de guardia.
 
 ## 6. Mantenimiento y Comandos Útiles
  

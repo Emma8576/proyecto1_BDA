@@ -1,0 +1,8 @@
+Name,MemUsage
+ti4601-crdb-1,999.8MiB / 15.54GiB
+Name,MemUsage
+ti4601-crdb-2,895.1MiB / 15.54GiB
+Name,MemUsage
+ti4601-crdb-3,935.9MiB / 15.54GiB
+Name,MemUsage
+ti4601-postgres,30.45MiB / 15.54GiB
