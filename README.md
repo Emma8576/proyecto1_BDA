@@ -122,10 +122,10 @@ python proyecto1\measure_latency.py --gateway 127.0.0.1 --port 26257 --runs 50
 
 | Operación | Localidad | Región Objetivo | Muestras (n) | Latencia p50 (ms) | Latencia p99 (ms) | Observaciones |
 | :--- | :--- | :--- | :---: | :---: | :---: | :--- |
-| Lectura | Local | `tienda-a` | 50 | 3.740 | 63.184 | Atendida directamente por el leaseholder en el nodo local (`crdb-1`). |
-| Lectura | Remota | `tienda-b` | 50 | 5.679 | 6.850 | Consulta enrutada hacia el leaseholder ubicado en la región remota (`crdb-2`). |
-| Escritura | Local | `tienda-a` | 50 | 14.631 | 24.550 | Requiere la coordinación y quórum del protocolo Raft sobre la mayoría de los nodos (2/3). |
-| Escritura | Remota | `tienda-b` | 50 | 24.067 | 54.028 | Coordinación transaccional distribuida entre regiones con sobrecosto de enrutamiento. |
+| Lectura | Local | `tienda-a` | 50 | 1.199 | 2.391 | Atendida directamente por el leaseholder en el nodo local (`crdb-1`). |
+| Lectura | Remota | `tienda-b` | 50 | 1.835 | 3.068 | Consulta enrutada hacia el leaseholder ubicado en la región remota (`crdb-2`). |
+| Escritura | Local | `tienda-a` | 50 | 6.456 | 8.867 | Requiere la coordinación y quórum del protocolo Raft sobre la mayoría de los nodos (2/3). |
+| Escritura | Remota | `tienda-b` | 50 | 6.722 | 9.615 | Coordinación transaccional distribuida entre regiones con sobrecosto de enrutamiento. |
 
 > **Nota de Archivo de Evidencia:** Las muestras crudas de cada iteración fueron exportadas automáticamente y respaldadas en la ruta `evidence/mediciones_e3.csv`.
  
