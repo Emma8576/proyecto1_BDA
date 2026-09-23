@@ -141,11 +141,79 @@ services:
     networks:
       - curso
 
+  # --- E5: PostgreSQL primario + réplica de lectura (streaming replication real) ---
+
+  pg-primary:
+    image: postgres:16
+    container_name: ti4601-pg-primary
+    profiles: ["e5"]
+    environment:
+      POSTGRES_USER: ti4601
+      POSTGRES_PASSWORD: ti4601
+      POSTGRES_DB: ti4601
+    command: >
+      postgres
+      -c wal_level=replica
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c hot_standby=on
+    volumes:
+      - pg_primary_data:/var/lib/postgresql/data
+      - ./db/e5/primary-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ti4601 -d ti4601"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    networks:
+      - curso
+
+  pg-replica:
+    image: postgres:16
+    container_name: ti4601-pg-replica
+    profiles: ["e5"]
+    entrypoint: ["/replica-entrypoint.sh"]
+    environment:
+      POSTGRES_PASSWORD: ti4601  # no se usa: el volumen llega poblado vía pg_basebackup
+    volumes:
+      - pg_replica_data:/var/lib/postgresql/data
+      - ./db/e5/replica-entrypoint.sh:/replica-entrypoint.sh:ro
+    ports:
+      - "127.0.0.1:5435:5432"
+    depends_on:
+      pg-primary:
+        condition: service_healthy
+    networks:
+      - curso
+
+  app-e5:
+    build: .
+    image: ti4601:local
+    profiles: ["e5"]
+    working_dir: /src
+    environment:
+      PGHOST_PRIMARY: pg-primary
+      PGHOST_REPLICA: pg-replica
+      PGPORT: "5432"
+      PGUSER: ti4601
+      PGPASSWORD: ti4601
+      PGDATABASE: ti4601
+    volumes:
+      - .:/src
+    depends_on:
+      - pg-replica
+    networks:
+      - curso
+
 volumes:
   pgdata:
   crdb1:
   crdb2:
   crdb3:
+  pg_primary_data:
+  pg_replica_data:
 
 networks:
   curso:

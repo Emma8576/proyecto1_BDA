@@ -309,85 +309,108 @@ Vuelva al Paso 1 de la sección 5.2.
 
 #### 5.3.1 Alternativa: 1 nodo primario + réplica de lectura
 
-La alternativa directa para este dominio es un servidor PostgreSQL con replicación
-streaming: el nodo primario acepta todas las escrituras y la réplica sirve lecturas
-en modo asíncrono. No requiere configuración de regiones, cláusulas de localidad ni
-conocimiento de consenso distribuido. Es el punto de partida estándar para sistemas
-de comercio de tamaño pequeño a mediano.
+La alternativa directa para este dominio es un servidor PostgreSQL con
+**streaming replication** real: un nodo primario acepta todas las escrituras
+y una réplica recibe el WAL de forma asíncrona y sirve lecturas. No requiere
+configuración de regiones, cláusulas de localidad ni consenso distribuido. Es
+el punto de partida estándar para sistemas de comercio de tamaño pequeño a
+mediano.
 
 #### 5.3.2 Comparación
 
 ##### 5.3.2.1 Latencia (números reales, misma red Docker, n = 50)
 
-Las mediciones de CockroachDB se re-ejecutaron desde dentro de un contenedor
-(`--gateway crdb-1`) en las mismas condiciones que las de PostgreSQL (`PGHOST=postgres`),
-eliminando la variable de NAT y red. Los números de E3 del README se conservan como
-evidencia histórica de esa ejecución en otra máquina.
+Ambas mediciones se corrieron desde dentro de la red Docker del proyecto
+(sin NAT ni acceso desde el host), en las mismas condiciones: CockroachDB
+con `measure_latency.py --gateway crdb-1`, PostgreSQL con
+`measure_latency_pg.py` contra el par `pg-primary` / `pg-replica`.
  
-> **Nota metodológica:** las mediciones de E3 del README fueron realizadas en una
-> máquina distinta, por lo que no son comparables directamente con los números de
-> PostgreSQL. Para esta comparación se re-ejecutó `measure_latency.py` desde dentro
-> de un contenedor en la misma red Docker (`--gateway crdb-1`), en las mismas
-> condiciones que la medición de PostgreSQL.
+> **Nota metodológica:** en PostgreSQL "escritura" solo existe contra el
+> primario — una réplica física no acepta `INSERT`/`UPDATE`. La fila de
+> "escritura/réplica" de CockroachDB se compara entonces contra la única
+> escritura posible en PostgreSQL. La lectura sí se compara nodo a nodo:
+> primario vs. primario, réplica vs. réplica.
  
-| Operación | Localidad | CockroachDB p50 | CockroachDB p99 | PostgreSQL p50 | PostgreSQL p99 | Factor (p50) |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| Lectura | Local | 0.425 ms | 0.778 ms | 0.078 ms | 0.276 ms | **5×** |
-| Lectura | Remota | 0.761 ms | 0.941 ms | 0.075 ms | 0.168 ms | **10×** |
-| Escritura | Local | 3.453 ms | 4.441 ms | 1.238 ms | 3.389 ms | **3×** |
-| Escritura | Remota | 3.781 ms | 7.634 ms | 1.366 ms | 3.842 ms | **3×** |
+| Operación | Nodo | CockroachDB p50 | CockroachDB p99 | PostgreSQL p50 | PostgreSQL p99 | Factor (p50) | Factor (p99) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| Lectura | Primario | 0.396 ms | 0.870 ms | 0.088 ms | 0.197 ms | **4.5×** | **4.4×** |
+| Lectura | Réplica | 0.833 ms | 1.489 ms | 0.073 ms | 0.179 ms | **11.4×** | **8.3×** |
+| Escritura | Primario | 3.277 ms | 8.444 ms | 1.531 ms | 1.820 ms | **2.1×** | **4.6×** |
  
-El protocolo Raft exige confirmación de 2/3 nodos antes de retornar al cliente,
-lo que impone un sobrecosto de **3× a 10×** en latencia respecto a PostgreSQL bajo
-condiciones simétricas. Las lecturas muestran el mayor contraste relativo: 0.425 ms
-en CockroachDB frente a 0.078 ms en PostgreSQL (~5×), atribuible al overhead del
-runtime distribuido y la resolución de leases. Las escrituras son ~3× más lentas
-por el quórum Raft: 3.5 ms frente a 1.2 ms en PostgreSQL.
+El protocolo Raft de CockroachDB exige confirmación de 2/3 nodos antes de
+retornar al cliente; streaming replication de PostgreSQL hace `fsync` local
+en el primario y no espera confirmación de la réplica antes del `commit`
+(modo asíncrono). Eso explica el patrón: las lecturas son donde más se nota
+el overhead relativo (4.5× a 11.4×, dominado por resolución de leases y
+enrutamiento dentro del clúster Raft), mientras que en escritura la brecha
+es menor en p50 (2.1×) porque ambos motores hacen trabajo de disco
+comparable, pero se dispara en p99 (4.6×), la cola larga de CockroachDB
+refleja los reintentos y la variabilidad de alcanzar quórum, algo que un
+solo nodo primario no sufre.
+ 
+Un dato que rompe la intuición ingenua: la lectura en la réplica de
+PostgreSQL (0.073 ms) fue **más rápida** que en el primario (0.088 ms). Con
+solo una conexión de por medio y sin carga concurrente esto es ruido de
+medición, no una ventaja arquitectónica, pero vale la pena señalarlo como
+límite del experimento en vez de ocultarlo: a diferencia de CockroachDB, la
+réplica de PostgreSQL no garantiza ver el dato más reciente (lag asíncrono),
+así que "más rápida" no implica "igual de correcta".
 
 ##### 5.3.2.2 Complejidad operativa
 
 | Dimensión | CockroachDB ×3 | PostgreSQL primario + réplica |
 | :--- | :--- | :--- |
-| Despliegue | `docker compose --profile lab1 up` + `crdb-init` | `docker compose up` |
+| Despliegue | `docker compose --profile lab1 up` + `crdb-init` | `docker compose --profile e5 up` + `pg_basebackup` |
 | Configuración de regiones | `ALTER DATABASE … ADD REGION` + DDL de localidad | No aplica |
 | Esquema | `LOCALITY GLOBAL` / `REGIONAL BY ROW` obligatorio | SQL estándar |
-| Failover | Automático (quórum Raft 2/3, ~3.9 s) | Manual o con Patroni (~30–60 s) |
-| Conocimiento requerido | Raft, leases, rangos, replicación multi-región | Replicación streaming básica |
+| Consistencia de lectura | Fuerte (quórum Raft) | Eventual en la réplica (lag asíncrono) |
+| Failover | Automático (quórum Raft 2/3, ~3.9 s) | Manual, o con Patroni/repmgr (~30–60 s); la réplica no promueve sola |
+| Conocimiento requerido | Raft, leases, rangos, replicación multi-región | `pg_hba.conf`, roles de replicación, `pg_basebackup`, slots físicos |
 
 ##### 5.3.2.3 Costo en la misma máquina
 
-Medición real con `docker stats` con ambos motores en estado idle (sin carga activa):
+Medición real con `docker stats`, ambos motores corriendo al mismo tiempo
+(cinco contenedores, sin carga activa):
  
 ```bash
-docker stats --no-stream --format "Name,MemUsage\n{{.Name}},{{.MemUsage}}" \
-  ti4601-crdb-1 ti4601-crdb-2 ti4601-crdb-3 ti4601-postgres \
+docker stats --no-stream --format "{{.Name}},{{.MemUsage}}" \
+  ti4601-crdb-1 ti4601-crdb-2 ti4601-crdb-3 ti4601-pg-primary ti4601-pg-replica \
   > evidence/consumo_mem.txt
 ```
  
 | Contenedor | Memoria usada |
 | :--- | :---: |
-| `ti4601-crdb-1` | 998.8 MiB |
-| `ti4601-crdb-2` | 895.1 MiB |
-| `ti4601-crdb-3` | 935.9 MiB |
-| **CockroachDB total** | **2 829.8 MiB** |
-| `ti4601-postgres` | 30.45 MiB |
+| `ti4601-crdb-1` | 1 004 MiB |
+| `ti4601-crdb-2` | 847.3 MiB |
+| `ti4601-crdb-3` | 961 MiB |
+| **CockroachDB total** | **2 812.3 MiB** |
+| `ti4601-pg-primary` | 37.79 MiB |
+| `ti4601-pg-replica` | 25.14 MiB |
+| **PostgreSQL total** | **62.93 MiB** |
  
-El clúster CockroachDB consume ~2.8 GiB de RAM frente a 30 MiB de PostgreSQL,
-una diferencia de **93×**. En una máquina de recursos limitados este overhead es
-determinante; en un servidor de producción dedicado es menos relevante pero sigue
-siendo un costo operativo real.
+El clúster CockroachDB consume ~2.8 GiB de RAM frente a ~63 MiB del par
+primario+réplica de PostgreSQL, una diferencia de **44.7×**. Esta cifra compara dos topologías equivalentes en función y el overhead de CockroachDB sigue siendo
+determinante en una máquina de recursos limitados.
 
 #### 5.3.3 Conclusión
 
-La distribución **no está justificada** en el escenario implementado (tres nodos en
-una sola máquina) porque el sobrecosto de latencia (3×–10× medido), complejidad
-operativa y consumo de recursos (~93× más RAM) se paga sin obtener separación
-geográfica real.
+La distribución **no está justificada** en el escenario implementado (tres
+nodos CockroachDB en una sola máquina) frente a un primario+réplica de
+PostgreSQL: el sobrecosto de latencia medido (2.1× a 11.4× según operación,
+hasta 8.3× en p99), el consumo de recursos (~44.7× más RAM) y la complejidad
+operativa (regiones, localidad, quórum Raft) se pagan sin obtener ninguna
+separación geográfica real ni ganancia de throughput perceptible en esta
+escala de datos.
  
-Está **justificada solo por residencia** si los nodos se despliegan en sitios
-físicamente separados: en ese caso `REGIONAL BY ROW` garantiza que el inventario y
-los pedidos de cada tienda residan y se sirvan localmente, y el failover automático
-(~3.9 s observado en E4) elimina la dependencia de un operador de guardia.
+Está **justificada solo por residencia** si los nodos se despliegan en
+sitios físicamente separados: en ese caso `REGIONAL BY ROW` garantiza que el
+inventario y los pedidos de cada tienda residan y se sirvan localmente
+algo que un primario+réplica de PostgreSQL no puede ofrecer, porque todas
+las escrituras viajan siempre al único primario sin importar dónde esté el
+cliente. El failover automático de CockroachDB (~3.9 s observado en E4)
+tampoco tiene equivalente aquí: la réplica de PostgreSQL no se promueve
+sola, así que ante la caída del primario un operador (o Patroni/repmgr)
+tiene que intervenir.
 
 ## 6. Mantenimiento y Comandos Útiles
  

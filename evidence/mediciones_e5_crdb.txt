@@ -1,0 +1,13 @@
+=== Proyecto 1 · gateway=crdb-1 · warmup=5 · n=50 ===
+Región del gateway: tienda-a
+
+operation locality home_region n p50_ms p99_ms
+----------------------------------------------------------
+read       local      tienda-a     50    0.396    0.870
+read       remote     tienda-b     50    0.833    1.489
+write      local      tienda-a     50    3.277    8.444
+write      remote     tienda-b     50    4.393    8.584
+
+Muestras crudas: evidence/mediciones_e5_crdb.csv
+
+Nota: Al correr las 3 regiones en una sola máquina, los tiempos locales/remotos serán muy similares a menos que se aplique simulación de latencia de red.

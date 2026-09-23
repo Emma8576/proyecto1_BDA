@@ -1,16 +1,28 @@
 #!/usr/bin/env python3
 """
-E5 — Mide p50/p99 sobre PostgreSQL para comparar con los números de E3 (CockroachDB).
+E5 — Mide p50/p99 sobre PostgreSQL primario + réplica de lectura.
 
-Corre las mismas 4 operaciones que measure_latency.py pero contra el servicio
-`postgres` del docker-compose. No existe concepto de región ni gateway_region(),
-así que "local" y "remote" son la misma conexión — el punto es medir el costo
-base sin consenso Raft.
+A diferencia de la versión anterior, aquí SÍ hay dos nodos reales conectados
+por streaming replication (ver docker-compose.yml, profile "e5"):
+
+    - pg-primary : acepta lecturas y escrituras.
+    - pg-replica : standby async, solo lecturas (aplica el WAL que llega
+                   de pg-primary; puede tener lag real, no simulado).
+
+Por eso las escrituras SIEMPRE van al primario (una réplica física no admite
+INSERT/UPDATE). Lo que se compara es:
+
+    read  / primary  -> leer en el nodo que también escribe
+    read  / replica  -> leer en el standby (puede ver un total desactualizado
+                         si la réplica no ha aplicado el último UPDATE)
+    write / primary  -> único lugar posible para escribir
+
+Esto reemplaza al "local"/"remote" de la versión anterior, que en realidad
+usaba la misma conexión con dos nombres distintos.
 
 Uso (desde el host):
-    docker compose run --rm app \
-      python3 proyecto1/measure_latency_pg.py --runs 50 \
-      | tee evidence/mediciones_e5_pg.txt
+    make p1-pg-e5-setup
+    make p1-pg-e5-latency
 """
 
 from __future__ import annotations
@@ -34,22 +46,21 @@ ROWS = {
 
 @dataclass(frozen=True)
 class Case:
-    operation: str
-    locality: str   # "local" / "remote" — semántico, no real en PG
-    region: str
+    operation: str  # "read" | "write"
+    node: str        # "primary" | "replica"
+    region: str       # solo se usa para elegir la fila del seed
 
 
 CASES = (
-    Case("read",  "local",  "tienda-a"),
-    Case("read",  "remote", "tienda-b"),
-    Case("write", "local",  "tienda-a"),
-    Case("write", "remote", "tienda-b"),
+    Case("read",  "primary", "tienda-a"),
+    Case("read",  "replica", "tienda-b"),
+    Case("write", "primary", "tienda-a"),
 )
 
 
-def connect() -> psycopg.Connection:
+def connect(host_env: str, default_host: str) -> psycopg.Connection:
     return psycopg.connect(
-        host=os.environ.get("PGHOST", "postgres"),
+        host=os.environ.get(host_env, default_host),
         port=int(os.environ.get("PGPORT", 5432)),
         user=os.environ.get("PGUSER", "ti4601"),
         password=os.environ.get("PGPASSWORD", "ti4601"),
@@ -74,8 +85,9 @@ def execute_case(conn: psycopg.Connection, case: Case) -> None:
         ).fetchone()
         if row is None:
             raise RuntimeError(
-                f"No existe fila seed para {case.region}. "
-                "Ejecute proyecto1/seed.sql sobre PostgreSQL primero."
+                f"No existe fila seed para {case.region} en nodo '{case.node}'. "
+                "Ejecute 'make p1-pg-e5-setup' primero y espere a que la réplica "
+                "termine el clonado inicial."
             )
     else:
         conn.execute(
@@ -102,36 +114,45 @@ def main() -> int:
     parser.add_argument("--csv", default="evidence/mediciones_e5_pg.csv")
     args = parser.parse_args()
 
-    print(f"=== E5 · PostgreSQL primario · warmup={args.warmup} · n={args.runs} ===")
+    print(f"=== E5 · PostgreSQL primario + réplica · warmup={args.warmup} · n={args.runs} ===")
+
+    conns = {
+        "primary": connect("PGHOST_PRIMARY", "pg-primary"),
+        "replica": connect("PGHOST_REPLICA", "pg-replica"),
+    }
 
     summaries: list[dict] = []
     raw:       list[dict] = []
 
-    with connect() as conn:
+    try:
         for case in CASES:
+            conn = conns[case.node]
             samples = measure(conn, case, args.warmup, args.runs)
             for run, ms in enumerate(samples, start=1):
                 raw.append({
                     "operation": case.operation,
-                    "locality":  case.locality,
+                    "node":      case.node,
                     "home_region": case.region,
                     "run": run,
                     "latency_ms": f"{ms:.3f}",
                 })
             summaries.append({
                 "operation":   case.operation,
-                "locality":    case.locality,
+                "node":        case.node,
                 "home_region": case.region,
                 "n":           len(samples),
                 "p50_ms":      statistics.median(samples),
                 "p99_ms":      percentile_nearest_rank(samples, 0.99),
             })
+    finally:
+        for conn in conns.values():
+            conn.close()
 
-    print(f"\n{'operation':10} {'locality':10} {'home_region':12} {'n':>2} {'p50_ms':>8} {'p99_ms':>8}")
+    print(f"\n{'operation':10} {'node':10} {'home_region':12} {'n':>2} {'p50_ms':>8} {'p99_ms':>8}")
     print("-" * 58)
     for r in summaries:
         print(
-            f"{r['operation']:10} {r['locality']:10} {r['home_region']:12} "
+            f"{r['operation']:10} {r['node']:10} {r['home_region']:12} "
             f"{r['n']:>2} {r['p50_ms']:>8.3f} {r['p99_ms']:>8.3f}"
         )
 
@@ -142,8 +163,9 @@ def main() -> int:
         writer.writerows(raw)
     print(f"\nMuestras crudas: {args.csv}")
     print(
-        "\nNota: En PostgreSQL no hay separación de regiones — 'local' y 'remote'"
-        " usan la misma conexión. Los números miden el costo base sin Raft."
+        "\nNota: 'write/primary' es la única escritura posible (la réplica es solo"
+        " lectura). 'read/replica' refleja el lag real de streaming replication,"
+        " no una simulación."
     )
     return 0
 

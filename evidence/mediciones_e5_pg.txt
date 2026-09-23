@@ -1,12 +1,11 @@
-=== E5 · PostgreSQL primario · warmup=5 · n=50 ===
+=== E5 · PostgreSQL primario + réplica · warmup=5 · n=50 ===
 
-operation  locality   home_region   n   p50_ms   p99_ms
+operation  node       home_region   n   p50_ms   p99_ms
 ----------------------------------------------------------
-read       local      tienda-a     50    0.078    0.276
-read       remote     tienda-b     50    0.075    0.168
-write      local      tienda-a     50    1.238    3.389
-write      remote     tienda-b     50    1.366    3.842
+read       primary    tienda-a     50    0.088    0.197
+read       replica    tienda-b     50    0.073    0.179
+write      primary    tienda-a     50    1.531    1.820
 
 Muestras crudas: evidence/mediciones_e5_pg.csv
 
-Nota: En PostgreSQL no hay separación de regiones — 'local' y 'remote' usan la misma conexión. Los números miden el costo base sin Raft.
+Nota: 'write/primary' es la única escritura posible (la réplica es solo lectura). 'read/replica' refleja el lag real de streaming replication, no una simulación.
